@@ -2,6 +2,16 @@
 name = "like-a-clockwork"
 version = "0.1.0"
 edition = "2024"
+authors = ["gventino"]
+description = "Causal event tracking SDK for distributed systems, based on Lamport (1978). Implements Lamport Clocks, Vector Clocks, and framework-agnostic transport serialization."
+license = "GPL-3.0"
+repository = "https://github.com/gventino/like-a-clockwork"
+homepage = "https://github.com/gventino/like-a-clockwork"
+documentation = "https://docs.rs/like-a-clockwork"
+readme = "README.md"
+keywords = ["distributed-systems", "lamport-clock", "vector-clock", "causality", "microservices"]
+categories = ["algorithms", "data-structures", "network-programming"]
+exclude = [".github/"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

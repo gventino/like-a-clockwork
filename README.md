@@ -39,7 +39,13 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-like-a-clockwork = { git = "https://github.com/gventino/like-a-clockwork.git" }
+like-a-clockwork = "0.1"
+```
+
+Or via CLI:
+
+```bash
+cargo add like-a-clockwork
 ```
 
 ### Lamport Clock — Total Ordering
