@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fmt;
+
+use crate::vector::VectorTimestamp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CausalityRelation {
@@ -40,6 +43,31 @@ impl fmt::Display for CausalityRelation {
             Self::Concurrent => write!(f, "∥"),
             Self::Equal => write!(f, "="),
         }
+    }
+}
+
+pub fn compare(a: &VectorTimestamp, b: &VectorTimestamp) -> CausalityRelation {
+    let keys: HashSet<&String> = a.clocks().keys().chain(b.clocks().keys()).collect();
+
+    let mut a_leq_b = true;
+    let mut b_leq_a = true;
+
+    for key in &keys {
+        let va = a.get(key);
+        let vb = b.get(key);
+        if va > vb {
+            a_leq_b = false;
+        }
+        if vb > va {
+            b_leq_a = false;
+        }
+    }
+
+    match (a_leq_b, b_leq_a) {
+        (true, true) => CausalityRelation::Equal,
+        (true, false) => CausalityRelation::HappensBefore,
+        (false, true) => CausalityRelation::HappensAfter,
+        (false, false) => CausalityRelation::Concurrent,
     }
 }
 
@@ -143,5 +171,100 @@ mod tests {
             let deserialized: CausalityRelation = serde_json::from_str(&json).unwrap();
             assert_eq!(variant, deserialized);
         }
+    }
+
+    #[test]
+    fn compare_equal_vectors() {
+        use std::collections::HashMap;
+        let mut m = HashMap::new();
+        m.insert("a".to_string(), 1u64);
+        m.insert("b".to_string(), 2u64);
+        let ts_a = VectorTimestamp::from(m.clone());
+        let ts_b = VectorTimestamp::from(m);
+        assert_eq!(compare(&ts_a, &ts_b), CausalityRelation::Equal);
+    }
+
+    #[test]
+    fn compare_strictly_less() {
+        use std::collections::HashMap;
+        let mut ma = HashMap::new();
+        ma.insert("a".to_string(), 1u64);
+        ma.insert("b".to_string(), 1u64);
+        let mut mb = HashMap::new();
+        mb.insert("a".to_string(), 2u64);
+        mb.insert("b".to_string(), 2u64);
+        let ts_a = VectorTimestamp::from(ma);
+        let ts_b = VectorTimestamp::from(mb);
+        assert_eq!(compare(&ts_a, &ts_b), CausalityRelation::HappensBefore);
+    }
+
+    #[test]
+    fn compare_less_or_equal_with_one_strict() {
+        use std::collections::HashMap;
+        let mut ma = HashMap::new();
+        ma.insert("a".to_string(), 1u64);
+        ma.insert("b".to_string(), 2u64);
+        let mut mb = HashMap::new();
+        mb.insert("a".to_string(), 2u64);
+        mb.insert("b".to_string(), 2u64);
+        let ts_a = VectorTimestamp::from(ma);
+        let ts_b = VectorTimestamp::from(mb);
+        assert_eq!(compare(&ts_a, &ts_b), CausalityRelation::HappensBefore);
+    }
+
+    #[test]
+    fn compare_strictly_greater() {
+        use std::collections::HashMap;
+        let mut ma = HashMap::new();
+        ma.insert("a".to_string(), 3u64);
+        ma.insert("b".to_string(), 3u64);
+        let mut mb = HashMap::new();
+        mb.insert("a".to_string(), 1u64);
+        mb.insert("b".to_string(), 1u64);
+        let ts_a = VectorTimestamp::from(ma);
+        let ts_b = VectorTimestamp::from(mb);
+        assert_eq!(compare(&ts_a, &ts_b), CausalityRelation::HappensAfter);
+    }
+
+    #[test]
+    fn compare_concurrent() {
+        use std::collections::HashMap;
+        let mut ma = HashMap::new();
+        ma.insert("a".to_string(), 2u64);
+        ma.insert("b".to_string(), 1u64);
+        let mut mb = HashMap::new();
+        mb.insert("a".to_string(), 1u64);
+        mb.insert("b".to_string(), 2u64);
+        let ts_a = VectorTimestamp::from(ma);
+        let ts_b = VectorTimestamp::from(mb);
+        assert_eq!(compare(&ts_a, &ts_b), CausalityRelation::Concurrent);
+    }
+
+    #[test]
+    fn compare_with_different_sized_vectors() {
+        use std::collections::HashMap;
+        let mut ma = HashMap::new();
+        ma.insert("a".to_string(), 1u64);
+        let mut mb = HashMap::new();
+        mb.insert("a".to_string(), 1u64);
+        mb.insert("b".to_string(), 1u64);
+        let ts_a = VectorTimestamp::from(ma);
+        let ts_b = VectorTimestamp::from(mb);
+        // a has a=1, b=0(missing); b has a=1, b=1 → a <= b, so HappensBefore
+        assert_eq!(compare(&ts_a, &ts_b), CausalityRelation::HappensBefore);
+    }
+
+    #[test]
+    fn compare_inverse_symmetry() {
+        use std::collections::HashMap;
+        let mut ma = HashMap::new();
+        ma.insert("a".to_string(), 1u64);
+        ma.insert("b".to_string(), 0u64);
+        let mut mb = HashMap::new();
+        mb.insert("a".to_string(), 0u64);
+        mb.insert("b".to_string(), 1u64);
+        let ts_a = VectorTimestamp::from(ma);
+        let ts_b = VectorTimestamp::from(mb);
+        assert_eq!(compare(&ts_a, &ts_b), compare(&ts_b, &ts_a).inverse());
     }
 }
